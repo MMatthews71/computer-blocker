@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Blocked · FocusLock</title>
+    <link rel="stylesheet" href="block.css" />
+  </head>
+  <body>
+    <main class="card" role="alert" aria-live="polite">
+      <div class="lock" aria-hidden="true">◆</div>
+      <h1>Blocked</h1>
+      <p class="host" id="host">—</p>
+      <p class="reason" id="reason">This page is currently unavailable.</p>
+
+      <div class="meta">
+        <div class="meta-item">
+          <span class="meta-label">Next reset</span>
+          <span class="meta-value" id="reset">—</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Breaks left today</span>
+          <span class="meta-value" id="breaks">—</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="break-btn" class="primary" hidden>Use one 30-minute break</button>
+        <button id="close-btn" class="ghost">Close tab</button>
+      </div>
+
+      <p class="footnote">FocusLock is protecting your focus. This was a choice you made earlier.</p>
+    </main>
+    <script src="block.js"></script>
+  </body>
+</html>

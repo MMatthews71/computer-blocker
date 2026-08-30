@@ -6,10 +6,10 @@ REM  This makes the enforcer run on its own, without you keeping the app open:
 REM
 REM    1. Builds the project (via setup.bat).
 REM    2. Writes a tiny hidden watchdog script.
-REM    3. Registers two Scheduled Tasks (run only while you are logged on):
-REM         - "FocusLock Service Startup"  : starts the service at logon.
-REM         - "FocusLock Service Watchdog" : every 1 minute, restarts the
-REM                                          service within ~60s if it ever dies.
+REM    3. Registers a per-user Scheduled Task (runs only while logged on):
+REM         - "FocusLock Service Watchdog" : every 1 minute, starts the service
+REM                                          (incl. ~60s after login) and restarts
+REM                                          it within ~60s if it ever dies.
 REM    4. Starts the service now.
 REM
 REM  No admin rights required - the tasks run in your own user session.
@@ -37,7 +37,7 @@ if errorlevel 1 (
 )
 
 if not exist "%~dp0packages\service\dist\index.js" (
-    echo   [X] The service build is missing (packages\service\dist\index.js).
+    echo   [X] The service build is missing ^(packages\service\dist\index.js^).
     pause
     exit /b 1
 )
@@ -67,19 +67,17 @@ echo   Writing watchdog helper...
 >>"%VBS%" echo   sh.Run "node """ ^& svc ^& """", 0, False
 >>"%VBS%" echo End If
 
-REM --- 3. Register the scheduled tasks (idempotent) --------------------------
-echo   Registering scheduled tasks...
+REM --- 3. Register the watchdog task (idempotent, no admin needed) -----------
+REM  A per-user MINUTE task needs no elevation. It fires every minute while you
+REM  are logged on - which also starts the service within ~60s of login, so a
+REM  separate ONLOGON task (which WOULD require admin) is unnecessary. We still
+REM  delete any old ONLOGON task a previous version may have created.
+echo   Registering watchdog task...
 schtasks /Delete /TN "%TASK_WATCH%" /F >nul 2>nul
 schtasks /Delete /TN "%TASK_LOGON%" /F >nul 2>nul
 schtasks /Create /TN "%TASK_WATCH%" /TR "wscript.exe \"%VBS%\"" /SC MINUTE /MO 1 /F
 if errorlevel 1 (
     echo   [X] Could not create the watchdog task.
-    pause
-    exit /b 1
-)
-schtasks /Create /TN "%TASK_LOGON%" /TR "wscript.exe \"%VBS%\"" /SC ONLOGON /F
-if errorlevel 1 (
-    echo   [X] Could not create the startup task.
     pause
     exit /b 1
 )

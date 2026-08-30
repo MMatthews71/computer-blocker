@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FocusLock",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Asks the FocusLock background service whether a page may load, and shows the block page when it may not.",
   "permissions": ["webNavigation", "tabs", "storage", "alarms"],
   "host_permissions": ["<all_urls>", "http://127.0.0.1/*", "http://localhost/*"],

@@ -6,9 +6,12 @@
  * this page load?", and if the answer is no it redirects the tab to the
  * bundled block page. The service is always the single source of truth.
  *
- * If the service is unreachable the extension FAILS CLOSED: it blocks the
- * navigation and shows a "protection unavailable" block page rather than
- * letting the page through.
+ * If the service is unreachable the extension DEGRADES SAFELY rather than
+ * failing closed on the entire web: it keeps a local mirror of the block list
+ * and, while the service is momentarily down, blocks ONLY sites on that list
+ * and lets everything else load. The instant the service answers again its
+ * authoritative decisions take over. (Previously a downed service blocked every
+ * page and locked the user out of the whole browser.)
  *
  * Reliability: navigations are caught from several angles — webNavigation
  * (before-navigate, committed, history state), tabs.onUpdated (reloads and URL
@@ -24,6 +27,103 @@ const BLOCK_PAGE = chrome.runtime.getURL('block.html');
 
 function log(...args) {
   console.log('[FocusLock]', ...args);
+}
+
+// --- Offline block-list cache -----------------------------------------------
+// The service is always the single source of truth. But if it is momentarily
+// unreachable we must NOT brick the whole browser by blocking everything — that
+// old fail-closed-on-everything behaviour locked the user out of every site.
+// Instead we mirror the block list locally (refreshed whenever the service is
+// up) and, while it is down, block only the sites actually on the list.
+const CACHE_KEY = 'focuslock:blocklist';
+let blockCache = []; // [{ kind, value }] — web targets that aren't always-allowed.
+
+/** Load the cached block list from storage into memory (on worker wake-up). */
+async function loadBlockCache() {
+  try {
+    const stored = await chrome.storage.local.get(CACHE_KEY);
+    if (Array.isArray(stored[CACHE_KEY])) blockCache = stored[CACHE_KEY];
+    log(`loaded ${blockCache.length} cached block pattern(s)`);
+  } catch (err) {
+    log('loadBlockCache failed:', String(err && err.message ? err.message : err));
+  }
+}
+
+/** Refresh the cache from the service's authoritative state. No-op if down. */
+async function refreshBlockCache() {
+  try {
+    const res = await fetch(`${SERVICE_ORIGIN}/state`, { signal: AbortSignal.timeout(1500) });
+    if (!res.ok) return;
+    const state = await res.json();
+    const targets = Array.isArray(state && state.managedTargets) ? state.managedTargets : [];
+    const next = [];
+    for (const mt of targets) {
+      const t = mt && mt.target;
+      const rule = mt && mt.rule;
+      if (!t || !rule || typeof t.value !== 'string' || !t.value) continue;
+      // Only web targets can be matched against a URL offline, and an
+      // always-allowed target never blocks — neither belongs in the cache.
+      if (t.kind !== 'domain' && t.kind !== 'url' && t.kind !== 'keyword') continue;
+      if (rule.type === 'always-allowed') continue;
+      next.push({ kind: t.kind, value: t.value });
+    }
+    blockCache = next;
+    await chrome.storage.local.set({ [CACHE_KEY]: next });
+    log(`refreshed block cache: ${next.length} pattern(s)`);
+  } catch {
+    /* service down — keep whatever we already have cached */
+  }
+}
+
+// Offline matchers — ported verbatim from @focuslock/core's match.ts so the
+// fallback classifies a URL exactly the way the service would.
+function normalizeHost(host) {
+  return host.trim().toLowerCase().replace(/^www\./, '');
+}
+function hostFromUrl(url) {
+  try {
+    return normalizeHost(new URL(url.includes('://') ? url : `https://${url}`).hostname);
+  } catch {
+    return null;
+  }
+}
+function hostMatchesDomain(host, domain) {
+  const h = normalizeHost(host);
+  const d = normalizeHost(domain);
+  return h === d || h.endsWith(`.${d}`);
+}
+function normalizeAlnum(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+function safePath(url) {
+  try {
+    return new URL(url.includes('://') ? url : `https://${url}`).pathname || '/';
+  } catch {
+    return '/';
+  }
+}
+function matchesCached(url, entry) {
+  const host = hostFromUrl(url);
+  if (host === null) return false;
+  switch (entry.kind) {
+    case 'domain':
+      return hostMatchesDomain(host, entry.value);
+    case 'url': {
+      const ruleHost = hostFromUrl(entry.value);
+      if (!ruleHost || !hostMatchesDomain(host, ruleHost)) return false;
+      return safePath(url).startsWith(safePath(entry.value));
+    }
+    case 'keyword': {
+      const needle = normalizeAlnum(entry.value);
+      return needle.length > 0 && normalizeAlnum(host).includes(needle);
+    }
+    default:
+      return false;
+  }
+}
+/** True if `url` is on the cached block list (used only while service is down). */
+function offlineBlocked(url) {
+  return blockCache.some((entry) => matchesCached(url, entry));
 }
 
 /** Best-effort detection of which browser this is, for the guardian. */
@@ -104,8 +204,16 @@ async function evaluate(tabId, url, source) {
   if (!isGovernable(url)) return;
 
   const decision = await checkUrl(url);
-  const blocked = decision ? !decision.allowed : true; // fail closed on null
-  log(source, blocked ? 'BLOCK' : 'allow', url, decision ? `(${decision.reason})` : '(no service)');
+  let blocked;
+  if (decision) {
+    blocked = !decision.allowed;
+    log(source, blocked ? 'BLOCK' : 'allow', url, `(${decision.reason})`);
+  } else {
+    // Service unreachable: fall back to the cached block list instead of
+    // failing closed on the whole web. Only known-bad sites are blocked.
+    blocked = offlineBlocked(url);
+    log(source, blocked ? 'BLOCK (offline cache)' : 'allow (offline; not on list)', url);
+  }
   if (blocked) {
     try {
       await chrome.tabs.update(tabId, { url: blockPageFor(url, decision) });
@@ -145,11 +253,13 @@ function scanOpenTabs(reason) {
 }
 chrome.runtime.onStartup.addListener(() => {
   sendHeartbeat();
+  loadBlockCache().then(() => refreshBlockCache());
   scanOpenTabs('browser startup');
 });
 chrome.runtime.onInstalled.addListener(() => {
   log('installed / updated — FocusLock extension active');
   sendHeartbeat();
+  loadBlockCache().then(() => refreshBlockCache());
   scanOpenTabs('installed');
 });
 
@@ -174,6 +284,7 @@ chrome.alarms.create('focuslock-recheck', { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'focuslock-recheck') {
     sendHeartbeat(); // ~every 30s, well within the guardian's timeout
+    refreshBlockCache(); // keep the offline fallback list current
     scanOpenTabs('alarm');
   }
 });
@@ -233,3 +344,4 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 log(`service worker loaded (browser: ${BROWSER_FAMILY})`);
 sendHeartbeat();
+loadBlockCache().then(() => refreshBlockCache());

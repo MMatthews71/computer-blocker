@@ -22,6 +22,7 @@ import { ProtectionService } from './service.js';
 import { Store } from './store.js';
 import { createApiServer, DEFAULT_PORT } from './server.js';
 import { ExtensionGuardian } from './guardian.js';
+import { AppGuardian } from './appguard.js';
 
 export interface BootOptions {
   dataDir?: string;
@@ -40,7 +41,15 @@ export function boot(options: BootOptions = {}) {
   });
   guardian.start();
 
-  const server = createApiServer(service, { port: options.port ?? DEFAULT_PORT, guardian });
+  // The app guardian closes running apps the user has blocked (e.g. Terraria).
+  const appGuardian = new AppGuardian({
+    evaluate: (name) => service.evaluateApp(name),
+    onBlocked: (name, decision) => service.recordAppBlocked(name, decision),
+    log,
+  });
+  appGuardian.start();
+
+  const server = createApiServer(service, { port: options.port ?? DEFAULT_PORT, guardian, appGuardian });
 
   const status = service.getStatus();
   log(`FocusLock service listening on 127.0.0.1:${options.port ?? DEFAULT_PORT}`);
@@ -65,6 +74,7 @@ export function boot(options: BootOptions = {}) {
     log('shutting down…');
     clearInterval(heartbeat);
     guardian.stop();
+    appGuardian.stop();
     server.close();
     store.close();
     process.exit(0);

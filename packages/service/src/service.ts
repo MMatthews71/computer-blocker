@@ -40,7 +40,7 @@ import { Store } from './store.js';
  * service outlives the UI, so a stale one could otherwise keep running with old
  * logic — e.g. not understanding a newer target type).
  */
-export const SERVICE_VERSION = '0.1.3-guardian';
+export const SERVICE_VERSION = '0.2.0-appguard';
 
 export interface ServiceStatus {
   running: true;
@@ -103,6 +103,23 @@ export class ProtectionService {
     const decision = evaluateSafely(this.state, request, now);
     if (!decision.allowed) this.recordBlockedAttempt(request, decision, now);
     return decision;
+  }
+
+  /**
+   * Evaluate a running app by process/image name, WITHOUT recording a blocked
+   * attempt. Used by the app guardian, which polls constantly and records its
+   * own stat once per new block. Deliberately uses `evaluateSafely` rather than
+   * {@link check}: it must NOT fail closed on integrity failure, because the app
+   * guardian only ever acts on a non-null `targetId` (an explicitly-managed app
+   * target) — never on unrelated system processes.
+   */
+  evaluateApp(processName: string, now = Date.now()): Decision {
+    return evaluateSafely(this.state, { kind: 'app', value: processName }, now);
+  }
+
+  /** Record that the app guardian closed a blocked app (for statistics). */
+  recordAppBlocked(processName: string, decision: Decision, now = Date.now()): void {
+    this.recordBlockedAttempt({ kind: 'app', value: processName }, decision, now);
   }
 
   getStats(now = Date.now()): DailyStats {

@@ -24,12 +24,14 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import type { ProtectionService } from './service.js';
 import type { ExtensionGuardian } from './guardian.js';
+import type { AppGuardian } from './appguard.js';
 import type { AccessRequest, Rule } from '@focuslock/core';
 
 export interface ServerOptions {
   host?: string;
   port?: number;
   guardian?: ExtensionGuardian;
+  appGuardian?: AppGuardian;
 }
 
 export const DEFAULT_PORT = 47615; // "FOCUS" on a phone keypad-ish; loopback only.
@@ -37,9 +39,10 @@ export const DEFAULT_PORT = 47615; // "FOCUS" on a phone keypad-ish; loopback on
 export function createApiServer(service: ProtectionService, options: ServerOptions = {}): Server {
   const host = options.host ?? '127.0.0.1';
   const guardian = options.guardian;
+  const appGuardian = options.appGuardian;
 
   const server = createServer((req, res) => {
-    handle(service, guardian, req, res).catch((err) => {
+    handle(service, guardian, appGuardian, req, res).catch((err) => {
       sendJson(res, 500, { error: String(err?.message ?? err) });
     });
   });
@@ -59,6 +62,7 @@ export function createApiServer(service: ProtectionService, options: ServerOptio
 async function handle(
   service: ProtectionService,
   guardian: ExtensionGuardian | undefined,
+  appGuardian: AppGuardian | undefined,
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
@@ -82,6 +86,7 @@ async function handle(
     return sendJson(res, 200, {
       ...service.getStatus(),
       guardian: { enforce: enforceExtension, browsers: guardian ? guardian.status() : [] },
+      appGuardian: { blocked: appGuardian ? appGuardian.status() : [] },
     });
   }
   // Extension heartbeat: proof that a supported browser is running FocusLock.

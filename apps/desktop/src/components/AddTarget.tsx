@@ -18,7 +18,7 @@ export function AddTarget({
   };
 
   const placeholder =
-    kind === 'domain' ? 'youtube.com' : kind === 'keyword' ? '123movies' : 'Discord';
+    kind === 'domain' ? 'youtube.com' : kind === 'keyword' ? '123movies' : 'Terraria';
 
   return (
     <div className="rounded-xl border border-ink-600 bg-ink-850/60 p-4">
@@ -61,6 +61,14 @@ export function AddTarget({
           Blocks any website whose address contains “{value.trim() || 'keyword'}”. Great for
           sites with many mirror domains — e.g. “123movies” blocks 123movies.com,
           123movies-free.net, ww1.123-movies.to, and so on.
+        </p>
+      )}
+
+      {kind === 'app' && (
+        <p className="mt-2 text-xs text-slate-500">
+          Blocks a desktop app by its process name — e.g. “{value.trim() || 'Terraria'}” matches{' '}
+          {(value.trim() || 'Terraria')}.exe. While blocked, the app is force-closed within a few
+          seconds of launching. The “.exe” is optional and matching is case-insensitive.
         </p>
       )}
     </div>

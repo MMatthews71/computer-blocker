@@ -114,10 +114,6 @@ export function App() {
               key={mt.target.id}
               managed={mt}
               ruleLabel={RULE_LABEL[mt.rule.type]}
-              onRemove={async () => {
-                await api.removeTarget(mt.target.id);
-                refresh();
-              }}
               onChangeRule={async (rule) => {
                 await api.updateTargetRule(mt.target.id, rule);
                 refresh();

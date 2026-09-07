@@ -14,17 +14,22 @@ const KIND_ICON: Record<string, string> = {
 export function TargetRow({
   managed,
   ruleLabel,
-  onRemove,
   onChangeRule,
   onStartBreak,
 }: {
   managed: ManagedTarget;
   ruleLabel: string;
-  onRemove: () => void;
   onChangeRule: (rule: Rule) => void;
   onStartBreak: () => void;
 }) {
   const { target, rule } = managed;
+  // Commitment lock: you can make a target stricter, but you can't unblock it by
+  // switching to "Always allowed" (the service rejects it). Hide that option
+  // unless the target is already allowed, so the control never offers a change
+  // that would just fail.
+  const ruleOptions = rule.type === 'always-allowed'
+    ? RULE_TYPES
+    : RULE_TYPES.filter((t) => t !== 'always-allowed');
   return (
     <div className="flex items-center justify-between gap-4 py-3">
       <div className="flex min-w-0 items-center gap-3">
@@ -49,15 +54,19 @@ export function TargetRow({
           onChange={(e) => onChangeRule(ruleForType(e.target.value as RuleType))}
           aria-label={`Rule for ${target.label} (currently ${ruleLabel})`}
         >
-          {RULE_TYPES.map((t) => (
+          {ruleOptions.map((t) => (
             <option key={t} value={t}>
               {labelFor(t)}
             </option>
           ))}
         </select>
-        <button className="btn btn-ghost" onClick={onRemove} aria-label={`Remove ${target.label}`}>
-          ✕
-        </button>
+        <span
+          aria-label={`${target.label} is locked and cannot be removed`}
+          title="Locked — added targets can't be removed. You can only make them stricter."
+          className="cursor-default select-none px-1 text-slate-500"
+        >
+          🔒
+        </span>
       </div>
     </div>
   );

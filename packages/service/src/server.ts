@@ -131,10 +131,14 @@ async function handle(
     if (method === 'PUT') {
       const body = await readJson<{ rule: Rule }>(req);
       if (!body?.rule) return sendJson(res, 400, { error: 'expected {rule}' });
-      return sendJson(res, service.updateTargetRule(id, body.rule) ? 200 : 404, { ok: true });
+      const result = service.updateTargetRule(id, body.rule);
+      if (result.ok) return sendJson(res, 200, { ok: true });
+      return sendJson(res, result.reason === 'not-found' ? 404 : 403, { ok: false, error: result.reason });
     }
     if (method === 'DELETE') {
-      return sendJson(res, service.removeTarget(id) ? 200 : 404, { ok: true });
+      // Targets are locked once added (commitment device); removal is refused.
+      const result = service.removeTarget(id);
+      return sendJson(res, result.reason === 'not-found' ? 404 : 403, { ok: false, error: result.reason });
     }
   }
 

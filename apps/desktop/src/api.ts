@@ -50,10 +50,12 @@ export const api = {
   stats: () => request<DailyStats>('GET', '/stats'),
   addTarget: (target: Omit<Target, 'id'>, rule: Rule) =>
     request<ManagedTarget>('POST', '/targets', { target, rule }),
+  // Note: a target may be made stricter but never unblocked; the service
+  // rejects a change to "always-allowed" with 403.
   updateTargetRule: (id: string, rule: Rule) =>
     request<{ ok: boolean }>('PUT', `/targets/${encodeURIComponent(id)}`, { rule }),
-  removeTarget: (id: string) =>
-    request<{ ok: boolean }>('DELETE', `/targets/${encodeURIComponent(id)}`),
+  // Removal is intentionally not exposed: added targets are locked (commitment
+  // device). The service refuses DELETE /targets/:id with 403.
   addCategory: (categoryId: string, rule: Rule) =>
     request<ManagedTarget[]>('POST', '/categories', { categoryId, rule }),
   startBreak: (targetId: string) =>

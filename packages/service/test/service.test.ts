@@ -111,4 +111,50 @@ describe('ProtectionService end-to-end', () => {
     expect(tampered.check({ kind: 'web', value: 'https://example.com' }).allowed).toBe(true);
     reopened.close();
   });
+
+  describe('commitment lock (added targets cannot be removed or unblocked)', () => {
+    it('refuses to remove a target, and the target stays enforced', () => {
+      const t = service.addTarget(
+        { kind: 'app', value: 'Terraria', label: 'Terraria' },
+        { type: 'permanent-block' },
+      );
+      const result = service.removeTarget(t.target.id);
+      expect(result).toEqual({ ok: false, reason: 'locked' });
+      expect(service.getState().managedTargets).toHaveLength(1);
+      expect(service.check({ kind: 'app', value: 'Terraria.exe' }).allowed).toBe(false);
+    });
+
+    it('reports not-found when removing an id that was never added', () => {
+      expect(service.removeTarget('nope')).toEqual({ ok: false, reason: 'not-found' });
+    });
+
+    it('refuses to weaken a blocking rule to always-allowed', () => {
+      const t = service.addTarget(
+        { kind: 'domain', value: 'youtube.com', label: 'YouTube' },
+        { type: 'permanent-block' },
+      );
+      const result = service.updateTargetRule(t.target.id, { type: 'always-allowed' });
+      expect(result).toEqual({ ok: false, reason: 'locked-no-unblock' });
+      // Still blocked.
+      expect(service.check({ kind: 'web', value: 'https://youtube.com' }).allowed).toBe(false);
+    });
+
+    it('allows switching between blocking rules (making it stricter)', () => {
+      const t = service.addTarget(
+        { kind: 'domain', value: 'youtube.com', label: 'YouTube' },
+        { type: 'daily-break' },
+      );
+      expect(service.updateTargetRule(t.target.id, { type: 'permanent-block' })).toEqual({ ok: true });
+      const d = service.check({ kind: 'web', value: 'https://youtube.com' });
+      expect(d.allowed).toBe(false);
+      expect(d.reason).toBe('permanent-block');
+    });
+
+    it('reports not-found when updating an id that was never added', () => {
+      expect(service.updateTargetRule('nope', { type: 'permanent-block' })).toEqual({
+        ok: false,
+        reason: 'not-found',
+      });
+    });
+  });
 });

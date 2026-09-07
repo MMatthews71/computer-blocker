@@ -40,7 +40,7 @@ import { Store } from './store.js';
  * service outlives the UI, so a stale one could otherwise keep running with old
  * logic — e.g. not understanding a newer target type).
  */
-export const SERVICE_VERSION = '0.2.0-appguard';
+export const SERVICE_VERSION = '0.3.0-locked';
 
 export interface ServiceStatus {
   running: true;
@@ -139,23 +139,39 @@ export class ProtectionService {
     return managed;
   }
 
-  updateTargetRule(targetId: string, rule: Rule): boolean {
+  /**
+   * Change a target's rule.
+   *
+   * Commitment lock: a target may be made STRICTER or switched between blocking
+   * rules (permanent-block / daily-break / scheduled), but it may NOT be changed
+   * to `always-allowed`. Un-blocking by editing the rule would be a trivial way
+   * to defeat the "added targets can't be removed" guarantee, so it is refused.
+   */
+  updateTargetRule(targetId: string, rule: Rule): { ok: boolean; reason?: string } {
     const idx = this.state.managedTargets.findIndex((m) => m.target.id === targetId);
-    if (idx === -1) return false;
+    if (idx === -1) return { ok: false, reason: 'not-found' };
+    const current = this.state.managedTargets[idx]!;
+    // Allow a no-op on an already-allowed target (keeps idempotent PUTs working),
+    // but never let a blocking rule be downgraded to always-allowed.
+    if (rule.type === 'always-allowed' && current.rule.type !== 'always-allowed') {
+      return { ok: false, reason: 'locked-no-unblock' };
+    }
     const next = [...this.state.managedTargets];
-    next[idx] = { ...next[idx]!, rule };
+    next[idx] = { ...current, rule };
     this.state = { ...this.state, managedTargets: next };
     this.persist();
-    return true;
+    return { ok: true };
   }
 
-  removeTarget(targetId: string): boolean {
-    const before = this.state.managedTargets.length;
-    const managedTargets = this.state.managedTargets.filter((m) => m.target.id !== targetId);
-    if (managedTargets.length === before) return false;
-    this.state = { ...this.state, managedTargets };
-    this.persist();
-    return true;
+  /**
+   * Removal is DISABLED by design. FocusLock is a commitment device: once a
+   * target is on the list you cannot dismantle your own guardrails in a moment
+   * of weakness. The only reset is a deliberate, out-of-band wipe of the config
+   * file — which requires stopping the service and clears everything at once.
+   */
+  removeTarget(targetId: string): { ok: boolean; reason?: string } {
+    const exists = this.state.managedTargets.some((m) => m.target.id === targetId);
+    return { ok: false, reason: exists ? 'locked' : 'not-found' };
   }
 
   /** Add every known member of a category with the given rule. */

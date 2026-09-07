@@ -82,10 +82,10 @@ async function handle(
 
   // ---- Reads ----
   if (method === 'GET' && path === '/health') {
-    const enforceExtension = service.getState().settings.enforceExtension !== false;
     return sendJson(res, 200, {
       ...service.getStatus(),
-      guardian: { enforce: enforceExtension, browsers: guardian ? guardian.status() : [] },
+      // Browser enforcement is permanent — always on, no setting to disable it.
+      guardian: { enforce: true, browsers: guardian ? guardian.status() : [] },
       appGuardian: { blocked: appGuardian ? appGuardian.status() : [] },
     });
   }
@@ -198,7 +198,6 @@ async function handle(
     const body = await readJson<{
       resetTime?: string;
       timezoneOffsetMinutes?: number;
-      enforceExtension?: boolean;
     }>(req);
     service.updateSettings(body ?? {});
     return sendJson(res, 200, service.getState().settings);

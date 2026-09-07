@@ -160,14 +160,6 @@ export interface Settings {
    * has to touch the ambient system timezone.
    */
   timezoneOffsetMinutes: number;
-  /**
-   * When true (the default), the service closes any supported browser that is
-   * running without the FocusLock extension actively reporting in — after a
-   * grace period. This is enforcement of the "extensions can't just be removed"
-   * integrity guarantee. The engine itself ignores this flag; the background
-   * service's guardian reads it.
-   */
-  enforceExtension?: boolean;
 }
 
 /** The complete state the engine needs to make any decision. */

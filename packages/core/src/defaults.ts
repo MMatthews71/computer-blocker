@@ -9,7 +9,6 @@ import type { EngineState, Mode, Settings } from './types.js';
 export const DEFAULT_SETTINGS: Settings = {
   resetTime: '05:00',
   timezoneOffsetMinutes: 0,
-  enforceExtension: true,
 };
 
 /**

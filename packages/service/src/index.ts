@@ -35,8 +35,9 @@ export function boot(options: BootOptions = {}) {
   const service = new ProtectionService(store);
 
   // The guardian closes supported browsers that run without the extension.
+  // Enforcement is PERMANENT — there is no user setting to turn it off.
   const guardian = new ExtensionGuardian({
-    isEnabled: () => service.getState().settings.enforceExtension !== false,
+    isEnabled: () => true,
     log,
   });
   guardian.start();
@@ -54,7 +55,7 @@ export function boot(options: BootOptions = {}) {
   const status = service.getStatus();
   log(`FocusLock service listening on 127.0.0.1:${options.port ?? DEFAULT_PORT}`);
   log(`Protected targets: ${status.protectedTargets} | integrity: ${status.integrityOk ? 'OK' : 'FAILED (fail-closed)'}`);
-  log(`Extension enforcement: ${service.getState().settings.enforceExtension !== false ? 'ON' : 'off'}`);
+  log('Extension enforcement: ON (permanent)');
 
   // Heartbeat: a cheap liveness signal a supervisor / the UI can observe, and
   // a natural place to re-verify integrity over time.

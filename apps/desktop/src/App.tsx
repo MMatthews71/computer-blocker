@@ -77,16 +77,12 @@ export function App() {
         <div className="card">
           <h2 className="mb-1 text-sm font-medium text-slate-300">Browser protection</h2>
           <p className="mb-4 text-xs text-slate-500">
-            Close any supported browser that runs without the FocusLock extension.
+            Closes any browser without the FocusLock extension — including Firefox and other
+            browsers it can't run in. Always on; there's no off switch by design.
           </p>
-          <Toggle
-            on={status?.guardian?.enforce ?? true}
-            label={status?.guardian?.enforce ?? true ? 'Enforcing' : 'Off'}
-            onChange={async (on) => {
-              await api.updateSettings({ enforceExtension: on });
-              refresh();
-            }}
-          />
+          <span className="inline-flex items-center gap-2 rounded-lg border border-emerald-700/60 bg-emerald-900/30 px-3 py-1.5 text-sm font-medium text-emerald-300">
+            🔒 Enforcing · permanent
+          </span>
         </div>
       </section>
 
@@ -188,37 +184,6 @@ function GuardianBanner({ status }: { status: ServiceStatus | null }) {
         mode, choose “Load unpacked”, and select the <code>apps\extension</code> folder.
       </div>
     </div>
-  );
-}
-
-function Toggle({
-  on,
-  label,
-  onChange,
-}: {
-  on: boolean;
-  label: string;
-  onChange: (on: boolean) => void;
-}) {
-  return (
-    <button
-      onClick={() => onChange(!on)}
-      className="flex items-center gap-3"
-      aria-pressed={on}
-    >
-      <span
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-          on ? 'bg-accent-strong' : 'bg-ink-600'
-        }`}
-      >
-        <span
-          className={`inline-block h-5 w-5 transform rounded-full bg-white transition ${
-            on ? 'translate-x-5' : 'translate-x-0.5'
-          }`}
-        />
-      </span>
-      <span className="text-sm text-slate-300">{label}</span>
-    </button>
   );
 }
 

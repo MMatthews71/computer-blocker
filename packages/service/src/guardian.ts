@@ -3,10 +3,19 @@
  * extension.
  *
  * The extension sends a heartbeat to the service every ~30s. The guardian
- * lists running browser processes and, for any supported browser that is
- * running WITHOUT a recent heartbeat, closes it — but only after a grace
- * period, so the user has time to install/enable the extension. As soon as a
- * heartbeat arrives the browser is considered protected and left alone.
+ * lists running browser processes and, for any watched browser that is running
+ * WITHOUT a recent heartbeat, closes it — but only after a grace period, so the
+ * user has time to install/enable the extension. As soon as a heartbeat arrives
+ * the browser is considered protected and left alone.
+ *
+ * Two tiers of browser are watched:
+ *  - PROTECTABLE (Chromium: Chrome/Brave/Edge/Opera) — the extension runs here,
+ *    so a heartbeat protects them; no heartbeat means the extension is gone and
+ *    the browser is closed.
+ *  - UNSUPPORTED (Firefox, LibreWolf, Waterfox, Vivaldi, Arc, …) — no FocusLock
+ *    extension exists for them, so they can never report in and are always
+ *    closed while enforcement runs. This closes the "just use another browser"
+ *    bypass; the only way to browse is a supported browser with the extension.
  *
  * Safety: the grace period (default 120s) is far longer than the heartbeat
  * interval (30s), so a browser that genuinely has the extension is never
@@ -29,14 +38,48 @@ const EXES_BY_FAMILY: Record<string, string[]> = {
   opera: ['opera.exe'],
 };
 
+/**
+ * Chromium browsers the FocusLock extension can run in. These are "protectable":
+ * a heartbeat from the extension marks them safe. Without a heartbeat they are
+ * closed (the extension is missing/removed).
+ */
+const PROTECTABLE_EXES = ['chrome.exe', 'brave.exe', 'msedge.exe', 'opera.exe'];
+
+/**
+ * Browsers with no FocusLock extension available. They can NEVER report a
+ * heartbeat, so while enforcement is on they are always closed after the grace
+ * period. This is what stops Firefox (and friends) being used to sidestep web
+ * blocking entirely — the escape hatch a Chromium-only extension would leave.
+ */
+const UNSUPPORTED_EXES = [
+  'firefox.exe', // also covers Tor Browser & Mullvad Browser (both run as firefox.exe)
+  'librewolf.exe',
+  'waterfox.exe',
+  'floorp.exe',
+  'zen.exe',
+  'palemoon.exe',
+  'mullvadbrowser.exe',
+  'vivaldi.exe',
+  'arc.exe',
+];
+
 /** Every browser process the guardian watches. */
-const SUPPORTED_EXES = ['chrome.exe', 'brave.exe', 'msedge.exe', 'opera.exe'];
+const SUPPORTED_EXES = [...PROTECTABLE_EXES, ...UNSUPPORTED_EXES];
 
 const EXE_LABEL: Record<string, string> = {
   'chrome.exe': 'Chrome',
   'brave.exe': 'Brave',
   'msedge.exe': 'Edge',
   'opera.exe': 'Opera',
+  'firefox.exe': 'Firefox',
+  'librewolf.exe': 'LibreWolf',
+  'waterfox.exe': 'Waterfox',
+  'floorp.exe': 'Floorp',
+  'zen.exe': 'Zen',
+  'palemoon.exe': 'Pale Moon',
+  'mullvadbrowser.exe': 'Mullvad Browser',
+  'vivaldi.exe': 'Vivaldi',
+  'arc.exe': 'Arc',
 };
 
 export interface GuardianOptions {
@@ -157,6 +200,11 @@ async function defaultListRunning(): Promise<Set<string>> {
       if (lower.includes('brave')) found.add('brave.exe');
       if (lower.includes('microsoft edge') || lower.includes('msedge')) found.add('msedge.exe');
       if (lower.includes('opera')) found.add('opera.exe');
+      if (lower.includes('firefox')) found.add('firefox.exe');
+      if (lower.includes('librewolf')) found.add('librewolf.exe');
+      if (lower.includes('waterfox')) found.add('waterfox.exe');
+      if (lower.includes('vivaldi')) found.add('vivaldi.exe');
+      if (lower.includes('arc')) found.add('arc.exe');
     }
   } catch {
     /* if we can't list processes, enforce nothing this cycle */
@@ -174,7 +222,12 @@ async function defaultKillExe(exe: string): Promise<void> {
       'brave.exe': 'Brave Browser',
       'msedge.exe': 'Microsoft Edge',
       'opera.exe': 'Opera',
+      'firefox.exe': 'firefox',
+      'librewolf.exe': 'librewolf',
+      'waterfox.exe': 'waterfox',
+      'vivaldi.exe': 'Vivaldi',
+      'arc.exe': 'Arc',
     };
-    await execFileP('pkill', ['-f', names[exe] ?? exe]);
+    await execFileP('pkill', ['-f', names[exe] ?? exe.replace(/\.exe$/i, '')]);
   }
 }

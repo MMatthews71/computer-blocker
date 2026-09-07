@@ -40,7 +40,7 @@ import { Store } from './store.js';
  * service outlives the UI, so a stale one could otherwise keep running with old
  * logic — e.g. not understanding a newer target type).
  */
-export const SERVICE_VERSION = '0.3.0-locked';
+export const SERVICE_VERSION = '0.4.0-browsers';
 
 export interface ServiceStatus {
   running: true;
@@ -239,7 +239,6 @@ export class ProtectionService {
   updateSettings(patch: {
     resetTime?: string;
     timezoneOffsetMinutes?: number;
-    enforceExtension?: boolean;
   }): void {
     this.state = {
       ...this.state,
@@ -247,8 +246,6 @@ export class ProtectionService {
         resetTime: patch.resetTime ?? this.state.settings.resetTime,
         timezoneOffsetMinutes:
           patch.timezoneOffsetMinutes ?? this.state.settings.timezoneOffsetMinutes,
-        enforceExtension:
-          patch.enforceExtension ?? this.state.settings.enforceExtension ?? true,
       },
     };
     this.persist();

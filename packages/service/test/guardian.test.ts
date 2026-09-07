@@ -73,4 +73,29 @@ describe('ExtensionGuardian', () => {
     expect(status?.protected).toBe(false);
     expect(status?.secondsUntilClose).toBeGreaterThan(0);
   });
+
+  it('always closes an unsupported browser (Firefox) — it can never be protected', async () => {
+    const { guardian, killed } = makeGuardian({ running: new Set(['firefox.exe']), graceMs: 0 });
+    await guardian.tick(); // start clock
+    await guardian.tick(); // grace elapsed -> close
+    expect(killed).toContain('firefox.exe');
+  });
+
+  it('a chromium heartbeat does NOT protect Firefox (no bypass)', async () => {
+    const { guardian, killed } = makeGuardian({ running: new Set(['firefox.exe']), graceMs: 0 });
+    guardian.heartbeat('chrome'); // protects chrome/brave only
+    await guardian.tick();
+    await guardian.tick();
+    expect(killed).toContain('firefox.exe');
+  });
+
+  it('watches other non-extension browsers too (LibreWolf, Vivaldi, Arc)', async () => {
+    const { guardian, killed } = makeGuardian({
+      running: new Set(['librewolf.exe', 'vivaldi.exe', 'arc.exe']),
+      graceMs: 0,
+    });
+    await guardian.tick();
+    await guardian.tick();
+    expect(killed).toEqual(expect.arrayContaining(['librewolf.exe', 'vivaldi.exe', 'arc.exe']));
+  });
 });

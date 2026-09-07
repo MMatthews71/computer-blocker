@@ -74,6 +74,5 @@ export const api = {
   updateSettings: (patch: {
     resetTime?: string;
     timezoneOffsetMinutes?: number;
-    enforceExtension?: boolean;
   }) => request('PUT', '/settings', patch),
 };

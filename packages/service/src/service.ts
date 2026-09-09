@@ -40,7 +40,7 @@ import { Store } from './store.js';
  * service outlives the UI, so a stale one could otherwise keep running with old
  * logic — e.g. not understanding a newer target type).
  */
-export const SERVICE_VERSION = '0.4.0-browsers';
+export const SERVICE_VERSION = '0.5.0-breaknotify';
 
 export interface ServiceStatus {
   running: true;

@@ -23,6 +23,8 @@ import { Store } from './store.js';
 import { createApiServer, DEFAULT_PORT } from './server.js';
 import { ExtensionGuardian } from './guardian.js';
 import { AppGuardian } from './appguard.js';
+import { BreakNotifier } from './breaknotify.js';
+import { notify } from './notify.js';
 
 export interface BootOptions {
   dataDir?: string;
@@ -50,6 +52,15 @@ export function boot(options: BootOptions = {}) {
   });
   appGuardian.start();
 
+  // Warns the user (via a native OS notification, wherever they are) shortly
+  // before an active break ends.
+  const breakNotifier = new BreakNotifier({
+    getActiveBreak: () => service.getState().breaks.activeBreak,
+    notify: (title, body) => notify(title, body, log),
+    log,
+  });
+  breakNotifier.start();
+
   const server = createApiServer(service, { port: options.port ?? DEFAULT_PORT, guardian, appGuardian });
 
   const status = service.getStatus();
@@ -76,6 +87,7 @@ export function boot(options: BootOptions = {}) {
     clearInterval(heartbeat);
     guardian.stop();
     appGuardian.stop();
+    breakNotifier.stop();
     server.close();
     store.close();
     process.exit(0);

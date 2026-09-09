@@ -110,10 +110,6 @@ export function App() {
               key={mt.target.id}
               managed={mt}
               ruleLabel={RULE_LABEL[mt.rule.type]}
-              onChangeRule={async (rule) => {
-                await api.updateTargetRule(mt.target.id, rule);
-                refresh();
-              }}
               onStartBreak={async () => {
                 await api.startBreak(mt.target.id);
                 refresh();

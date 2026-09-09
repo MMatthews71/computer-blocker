@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Rule, RuleType, Target } from '@focuslock/core';
+import type { Rule, Target } from '@focuslock/core';
 
 export function AddTarget({
   onAdd,
@@ -8,12 +8,13 @@ export function AddTarget({
 }) {
   const [kind, setKind] = useState<'domain' | 'keyword' | 'app'>('domain');
   const [value, setValue] = useState('');
-  const [ruleType, setRuleType] = useState<RuleType>('daily-break');
 
   const submit = () => {
     const trimmed = value.trim();
     if (!trimmed) return;
-    onAdd({ kind, value: trimmed, label: prettyLabel(kind, trimmed) }, ruleForType(ruleType));
+    // Daily breaks is the only blocking strategy: blocked by default, with a
+    // limited number of timed breaks per day.
+    onAdd({ kind, value: trimmed, label: prettyLabel(kind, trimmed) }, { type: 'daily-break' });
     setValue('');
   };
 
@@ -40,17 +41,12 @@ export function AddTarget({
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && submit()}
         />
-        <select
-          className="rounded-lg border border-ink-600 bg-ink-850 px-2 py-2 text-sm"
-          value={ruleType}
-          onChange={(e) => setRuleType(e.target.value as RuleType)}
-          aria-label="Rule"
+        <span
+          className="rounded-lg border border-ink-600 bg-ink-850 px-3 py-2 text-sm text-slate-400"
+          title="Every target uses daily breaks: blocked by default, with a few timed breaks a day."
         >
-          <option value="permanent-block">Permanent block</option>
-          <option value="daily-break">Daily breaks</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="always-allowed">Always allowed</option>
-        </select>
+          Daily breaks
+        </span>
         <button className="btn btn-primary" onClick={submit}>
           Add
         </button>
@@ -79,9 +75,4 @@ function prettyLabel(kind: 'domain' | 'keyword' | 'app', value: string): string 
   if (kind === 'keyword') return `“${value}” (keyword)`;
   const base = value.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0] ?? value;
   return base.charAt(0).toUpperCase() + base.slice(1);
-}
-
-function ruleForType(t: RuleType): Rule {
-  if (t === 'scheduled') return { type: 'scheduled', windows: [{ start: '19:00', end: '21:00' }] };
-  return { type: t } as Rule;
 }

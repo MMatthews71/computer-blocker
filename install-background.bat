@@ -29,7 +29,7 @@ echo   ======================================
 echo(
 
 REM --- 1. Build (installs deps + compiles). setup.bat is visible on purpose. --
-call "%~dp0setup.bat"
+call "%~dp0setup.bat" rebuild
 if errorlevel 1 (
     echo   [X] Build failed - fix the errors above and re-run.
     pause

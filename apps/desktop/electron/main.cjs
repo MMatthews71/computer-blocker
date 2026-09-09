@@ -218,9 +218,14 @@ function loadWithRetry(win, url, attempt = 0) {
   });
 }
 
-app.whenReady().then(async () => {
-  await ensureServiceRunning();
+app.whenReady().then(() => {
+  // Show the window IMMEDIATELY, then bring the service up in the background.
+  // The renderer polls /health and fills in once the service answers, so there
+  // is no reason to stare at a blank screen while we probe/spawn the service.
+  // (Previously this awaited ensureServiceRunning() first, adding seconds of
+  // nothing-on-screen to every launch.)
   createWindow();
+  ensureServiceRunning().catch((err) => log(`ensureServiceRunning failed: ${err.message}`));
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

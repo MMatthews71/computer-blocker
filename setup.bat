@@ -39,13 +39,28 @@ if not exist "node_modules\" (
     )
 )
 
-echo(
-echo   Building packages...
-call npm run build
-if errorlevel 1 (
-    echo   [X] Build failed.
-    pause
-    exit /b 1
+REM Build only when needed. Skip if every output already exists, unless the
+REM caller forces it with "rebuild"/"force". This keeps repeat launches and
+REM re-installs from paying the full monorepo build cost every time.
+set "NEED_BUILD="
+if /i "%~1"=="rebuild" set "NEED_BUILD=1"
+if /i "%~1"=="force" set "NEED_BUILD=1"
+if not exist "%~dp0apps\desktop\dist\index.html" set "NEED_BUILD=1"
+if not exist "%~dp0packages\service\dist\index.js" set "NEED_BUILD=1"
+if not exist "%~dp0packages\core\dist\index.js" set "NEED_BUILD=1"
+
+if defined NEED_BUILD (
+    echo(
+    echo   Building packages...
+    call npm run build
+    if errorlevel 1 (
+        echo   [X] Build failed.
+        pause
+        exit /b 1
+    )
+) else (
+    echo(
+    echo   Already built - skipping build. ^(Pass "rebuild" to force.^)
 )
 
 echo(

@@ -27,6 +27,32 @@ describe('ProtectionService end-to-end', () => {
     expect(service.check({ kind: 'web', value: 'https://tiktok.com' }).allowed).toBe(false);
   });
 
+  it('pause suspends all enforcement; resume restores it', () => {
+    service.addTarget({ kind: 'domain', value: 'tiktok.com', label: 'TikTok' }, { type: 'permanent-block' });
+    expect(service.check({ kind: 'web', value: 'https://tiktok.com' }).allowed).toBe(false);
+
+    service.pause();
+    expect(service.isPaused()).toBe(true);
+    const paused = service.check({ kind: 'web', value: 'https://tiktok.com' });
+    expect(paused.allowed).toBe(true);
+    expect(paused.reason).toBe('allowed-paused');
+    expect(service.getStatus().pausedUntil).not.toBeNull();
+
+    service.resume();
+    expect(service.isPaused()).toBe(false);
+    expect(service.check({ kind: 'web', value: 'https://tiktok.com' }).allowed).toBe(false);
+    expect(service.getStatus().pausedUntil).toBeNull();
+  });
+
+  it('a timed pause auto-resumes after its duration', () => {
+    service.addTarget({ kind: 'domain', value: 'tiktok.com', label: 'TikTok' }, { type: 'permanent-block' });
+    const now = Date.UTC(2024, 0, 1, 12, 0, 0);
+    service.pause(60_000, now);
+    expect(service.isPaused(now + 30_000)).toBe(true);
+    expect(service.isPaused(now + 60_001)).toBe(false);
+    expect(service.check({ kind: 'web', value: 'https://tiktok.com' }, now + 60_001).allowed).toBe(false);
+  });
+
   it('runs the full daily-break flow through the service', () => {
     const yt = service.addTarget(
       { kind: 'domain', value: 'youtube.com', label: 'YouTube' },

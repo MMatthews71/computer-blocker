@@ -170,6 +170,13 @@ export interface EngineState {
   modes: Mode[];
   activeModeId: string | null;
   activeSession: FocusSession | null;
+  /**
+   * Global pause. When set to a future timestamp, ALL enforcement is suspended
+   * until then — every check resolves to "allowed" and the guardians stop
+   * closing browsers/apps. `null` (or a past timestamp) means running normally.
+   * An indefinite pause uses {@link PAUSE_INDEFINITE}.
+   */
+  pausedUntil: EpochMs | null;
 }
 
 /** Why a target resolved the way it did. */
@@ -185,7 +192,8 @@ export type DecisionReason =
   | 'blocked-break-on-other-target'
   | 'blocked-by-mode'
   | 'blocked-by-focus-session'
-  | 'blocked-fail-closed';
+  | 'blocked-fail-closed'
+  | 'allowed-paused';
 
 /** The answer to "Can this load / run?" — the engine's whole purpose. */
 export interface Decision {

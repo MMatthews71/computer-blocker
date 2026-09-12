@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluate, evaluateSafely, dailyBreakTargets } from '../src/engine.js';
+import { evaluate, evaluateSafely, dailyBreakTargets, isPaused, PAUSE_INDEFINITE } from '../src/engine.js';
 import { createInitialState } from '../src/defaults.js';
 import { startBreak } from '../src/breaks.js';
 import type { EngineState, ManagedTarget, Rule } from '../src/types.js';
@@ -38,6 +38,32 @@ describe('evaluate — basic rule types', () => {
     expect(d.allowed).toBe(false);
     expect(d.reason).toBe('permanent-block');
     expect(d.breakAvailable).toBe(false);
+  });
+});
+
+describe('evaluate — global pause', () => {
+  const blocked = target('tiktok', 'domain', 'tiktok.com', { type: 'permanent-block' });
+
+  it('allows an otherwise-blocked target while paused indefinitely', () => {
+    const s = { ...stateWith([blocked]), pausedUntil: PAUSE_INDEFINITE };
+    const d = evaluate(s, web('https://tiktok.com'), T0);
+    expect(d.allowed).toBe(true);
+    expect(d.reason).toBe('allowed-paused');
+  });
+
+  it('allows while a timed pause is still active, blocks again after it lapses', () => {
+    const s = { ...stateWith([blocked]), pausedUntil: T0 + HOUR };
+    expect(evaluate(s, web('https://tiktok.com'), T0).allowed).toBe(true);
+    // One millisecond after the pause ends, enforcement is back.
+    const after = evaluate(s, web('https://tiktok.com'), T0 + HOUR + 1);
+    expect(after.allowed).toBe(false);
+    expect(after.reason).toBe('permanent-block');
+  });
+
+  it('isPaused reflects null / past / future pausedUntil', () => {
+    expect(isPaused({ ...stateWith([]), pausedUntil: null }, T0)).toBe(false);
+    expect(isPaused({ ...stateWith([]), pausedUntil: T0 - 1 }, T0)).toBe(false);
+    expect(isPaused({ ...stateWith([]), pausedUntil: T0 + 1 }, T0)).toBe(true);
   });
 });
 

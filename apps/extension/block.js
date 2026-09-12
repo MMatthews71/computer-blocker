@@ -66,6 +66,24 @@ if (breakAvailable && targetId && breaksRemaining > 0) {
   });
 }
 
+// Auto-recover: keep asking the service whether this page is allowed again. The
+// moment it is — most commonly because the user paused FocusLock — send them
+// straight back to where they were, so pausing takes effect without a manual
+// reload of every blocked tab.
+function pollAllowed() {
+  if (!originalUrl) return;
+  try {
+    chrome.runtime.sendMessage({ type: 'check', url: originalUrl }, (resp) => {
+      if (chrome.runtime.lastError) return; // worker asleep; try again next tick
+      if (resp && resp.allowed === true) location.href = originalUrl;
+    });
+  } catch {
+    /* ignore — retried on the next interval */
+  }
+}
+pollAllowed();
+setInterval(pollAllowed, 2000);
+
 document.getElementById('close-btn').addEventListener('click', () => {
   // window.close() only works for script-opened tabs; fall back to a blank page.
   window.close();

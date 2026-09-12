@@ -37,9 +37,11 @@ export function boot(options: BootOptions = {}) {
   const service = new ProtectionService(store);
 
   // The guardian closes supported browsers that run without the extension.
-  // Enforcement is PERMANENT — there is no user setting to turn it off.
+  // Enforcement is PERMANENT — the only thing that suspends it is a global
+  // pause (the app guardian is suspended automatically, since it defers to the
+  // engine, which allows everything while paused).
   const guardian = new ExtensionGuardian({
-    isEnabled: () => true,
+    isEnabled: () => !service.isPaused(),
     log,
   });
   guardian.start();

@@ -15,8 +15,6 @@
  *   POST /categories   {categoryId,rule}
  *   POST /breaks/start {targetId}
  *   POST /breaks/end
- *   POST /pause        {durationMs?}  suspend all enforcement
- *   POST /resume                      resume enforcement
  *   POST /modes/activate {modeId|null}
  *   POST /sessions/start {name,durationMs,locked,targetIds}
  *   POST /sessions/end
@@ -86,9 +84,8 @@ async function handle(
   if (method === 'GET' && path === '/health') {
     return sendJson(res, 200, {
       ...service.getStatus(),
-      // Browser enforcement is permanent — the only thing that suspends it is a
-      // global pause (see /pause), which the guardian observes via isEnabled.
-      guardian: { enforce: !service.isPaused(), browsers: guardian ? guardian.status() : [] },
+      // Browser enforcement is permanent — always on, no setting to disable it.
+      guardian: { enforce: true, browsers: guardian ? guardian.status() : [] },
       appGuardian: { blocked: appGuardian ? appGuardian.status() : [] },
     });
   }
@@ -165,17 +162,6 @@ async function handle(
   }
   if (method === 'POST' && path === '/breaks/end') {
     service.endBreak();
-    return sendJson(res, 200, { ok: true });
-  }
-
-  // ---- Global pause ----
-  if (method === 'POST' && path === '/pause') {
-    const body = await readJson<{ durationMs?: number }>(req);
-    const result = service.pause(body?.durationMs);
-    return sendJson(res, 200, { ok: true, ...result });
-  }
-  if (method === 'POST' && path === '/resume') {
-    service.resume();
     return sendJson(res, 200, { ok: true });
   }
 

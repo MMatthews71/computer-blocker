@@ -14,8 +14,6 @@
 import {
   createInitialState,
   evaluateSafely,
-  isPaused,
-  PAUSE_INDEFINITE,
   startBreak as startBreakPure,
   endBreakEarly as endBreakEarlyPure,
   expandCategory,
@@ -42,7 +40,7 @@ import { Store } from './store.js';
  * service outlives the UI, so a stale one could otherwise keep running with old
  * logic — e.g. not understanding a newer target type).
  */
-export const SERVICE_VERSION = '0.6.0-pause';
+export const SERVICE_VERSION = '0.7.0-nopause';
 
 export interface ServiceStatus {
   running: true;
@@ -52,8 +50,6 @@ export interface ServiceStatus {
   activeModeId: string | null;
   activeSession: FocusSession | null;
   breaksRemaining: number;
-  /** Timestamp the app is paused until, or null when running normally. */
-  pausedUntil: number | null;
 }
 
 export class ProtectionService {
@@ -66,9 +62,9 @@ export class ProtectionService {
       this.state = createInitialState(now);
       this.store.saveState(this.state);
     } else {
-      // Backward-compat: state persisted before global pause existed has no
-      // `pausedUntil`; treat a missing value as "running".
-      this.state = { ...loaded.state, pausedUntil: loaded.state.pausedUntil ?? null };
+      // Drop any leftover global-pause flag from older versions.
+      const { pausedUntil: _drop, ...rest } = loaded.state as EngineState & { pausedUntil?: unknown };
+      this.state = rest;
       this.integrityOk = !loaded.integrityFailed;
     }
   }
@@ -88,13 +84,7 @@ export class ProtectionService {
       activeModeId: this.state.activeModeId,
       activeSession: this.state.activeSession,
       breaksRemaining: this.state.breaks.tokensRemaining,
-      pausedUntil: isPaused(this.state, Date.now()) ? this.state.pausedUntil : null,
     };
-  }
-
-  /** True if the whole app is currently paused. */
-  isPaused(now = Date.now()): boolean {
-    return isPaused(this.state, now);
   }
 
   /**
@@ -216,26 +206,6 @@ export class ProtectionService {
 
   endBreak(now = Date.now()): void {
     this.state = { ...this.state, breaks: endBreakEarlyPure(this.state.breaks, now, this.state.settings) };
-    this.persist();
-  }
-
-  /**
-   * Pause ALL enforcement. With `durationMs` the pause auto-resumes after that
-   * long; without it the pause is indefinite until {@link resume} is called.
-   */
-  pause(durationMs?: number, now = Date.now()): { pausedUntil: number } {
-    const pausedUntil =
-      typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0
-        ? now + durationMs
-        : PAUSE_INDEFINITE;
-    this.state = { ...this.state, pausedUntil };
-    this.persist();
-    return { pausedUntil };
-  }
-
-  /** Resume enforcement immediately. */
-  resume(): void {
-    this.state = { ...this.state, pausedUntil: null };
     this.persist();
   }
 

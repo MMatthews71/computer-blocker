@@ -31,7 +31,6 @@ export interface ServiceStatus {
   activeModeId: string | null;
   activeSession: EngineState['activeSession'];
   breaksRemaining: number;
-  pausedUntil: number | null;
   guardian?: { enforce: boolean; browsers: BrowserGuardStatus[] };
 }
 
@@ -62,9 +61,6 @@ export const api = {
   startBreak: (targetId: string) =>
     request<{ ok: boolean; reason?: string }>('POST', '/breaks/start', { targetId }),
   endBreak: () => request<{ ok: boolean }>('POST', '/breaks/end'),
-  pause: (durationMs?: number) =>
-    request<{ ok: boolean; pausedUntil: number }>('POST', '/pause', { durationMs }),
-  resume: () => request<{ ok: boolean }>('POST', '/resume'),
   activateMode: (modeId: string | null) =>
     request<{ ok: boolean }>('POST', '/modes/activate', { modeId }),
   startSession: (name: string, durationMs: number, locked: boolean, targetIds: string[] = []) =>

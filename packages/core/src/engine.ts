@@ -42,18 +42,6 @@ import {
  *       - daily-break      -> ALLOW only while an exclusive break unlocks it
  *  3. No matching target -> ALLOW (FocusLock only governs what you configure).
  */
-/**
- * Sentinel timestamp for an indefinite pause (pause until the user resumes).
- * Any real `now` is comfortably below it, so {@link isPaused} stays true until
- * the pause is explicitly lifted.
- */
-export const PAUSE_INDEFINITE = Number.MAX_SAFE_INTEGER;
-
-/** True if the whole app is currently paused (all enforcement suspended). */
-export function isPaused(state: EngineState, now: number): boolean {
-  return state.pausedUntil != null && now < state.pausedUntil;
-}
-
 export function evaluate(
   state: EngineState,
   request: AccessRequest,
@@ -63,19 +51,6 @@ export function evaluate(
   const { timezoneOffsetMinutes, resetTime } = state.settings;
   const msUntilReset = msUntilNextReset(now, timezoneOffsetMinutes, resetTime);
   const breaksRemaining = breaks.tokensRemaining;
-
-  // (0) Global pause suspends all enforcement — everything is allowed.
-  if (isPaused(state, now)) {
-    return {
-      targetId: null,
-      allowed: true,
-      reason: 'allowed-paused',
-      breakAvailable: false,
-      breaksRemaining,
-      msUntilReset,
-      effectiveRule: { type: 'always-allowed' },
-    };
-  }
 
   const match = findMatchingTarget(request, state.managedTargets);
 

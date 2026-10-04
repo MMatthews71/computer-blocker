@@ -25,8 +25,6 @@ export function App() {
     return () => clearInterval(id);
   }, [refresh]);
 
-  const paused = state?.pausedUntil != null && Date.now() < state.pausedUntil;
-
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
       {error && (
@@ -34,31 +32,6 @@ export function App() {
           {error}
         </div>
       )}
-
-      <div className="mb-8 flex items-center justify-between gap-4">
-        <span
-          className={`inline-flex items-center gap-2 text-sm font-medium ${
-            paused ? 'text-amber-300' : 'text-emerald-300'
-          }`}
-        >
-          <span
-            className={`inline-block h-2.5 w-2.5 rounded-full ${
-              paused ? 'bg-amber-400' : 'bg-emerald-400'
-            }`}
-          />
-          {paused ? 'Paused — nothing is blocked' : 'Protection active'}
-        </span>
-        <button
-          className={paused ? 'btn btn-primary' : 'btn btn-ghost'}
-          onClick={async () => {
-            if (paused) await api.resume();
-            else await api.pause();
-            refresh();
-          }}
-        >
-          {paused ? 'Resume' : 'Pause'}
-        </button>
-      </div>
 
       <section className="mb-8">
         <BreakTokens

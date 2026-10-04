@@ -32,6 +32,5 @@ export function createInitialState(now: number, settings: Settings = DEFAULT_SET
     modes: defaultModes(),
     activeModeId: null,
     activeSession: null,
-    pausedUntil: null,
   };
 }

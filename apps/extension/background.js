@@ -36,26 +36,14 @@ function log(...args) {
 // Instead we mirror the block list locally (refreshed whenever the service is
 // up) and, while it is down, block only the sites actually on the list.
 const CACHE_KEY = 'focuslock:blocklist';
-const PAUSE_KEY = 'focuslock:pausedUntil';
 let blockCache = []; // [{ kind, value }] — web targets that aren't always-allowed.
-// Mirror of the service's global pause, so the offline fallback can honour it
-// too. null = running; a timestamp = paused until then.
-let pausedUntil = null;
-
-/** True if the whole app is paused right now (per the last known service state). */
-function isPausedNow() {
-  return typeof pausedUntil === 'number' && Date.now() < pausedUntil;
-}
 
 /** Load the cached block list from storage into memory (on worker wake-up). */
 async function loadBlockCache() {
   try {
-    const stored = await chrome.storage.local.get([CACHE_KEY, PAUSE_KEY]);
+    const stored = await chrome.storage.local.get(CACHE_KEY);
     if (Array.isArray(stored[CACHE_KEY])) blockCache = stored[CACHE_KEY];
-    if (typeof stored[PAUSE_KEY] === 'number' || stored[PAUSE_KEY] === null) {
-      pausedUntil = stored[PAUSE_KEY];
-    }
-    log(`loaded ${blockCache.length} cached block pattern(s); paused=${isPausedNow()}`);
+    log(`loaded ${blockCache.length} cached block pattern(s)`);
   } catch (err) {
     log('loadBlockCache failed:', String(err && err.message ? err.message : err));
   }
@@ -80,9 +68,8 @@ async function refreshBlockCache() {
       next.push({ kind: t.kind, value: t.value });
     }
     blockCache = next;
-    pausedUntil = typeof state.pausedUntil === 'number' ? state.pausedUntil : null;
-    await chrome.storage.local.set({ [CACHE_KEY]: next, [PAUSE_KEY]: pausedUntil });
-    log(`refreshed block cache: ${next.length} pattern(s); paused=${isPausedNow()}`);
+    await chrome.storage.local.set({ [CACHE_KEY]: next });
+    log(`refreshed block cache: ${next.length} pattern(s)`);
   } catch {
     /* service down — keep whatever we already have cached */
   }
@@ -136,8 +123,6 @@ function matchesCached(url, entry) {
 }
 /** True if `url` is on the cached block list (used only while service is down). */
 function offlineBlocked(url) {
-  // A global pause suspends all enforcement — honour it even offline.
-  if (isPausedNow()) return false;
   return blockCache.some((entry) => matchesCached(url, entry));
 }
 
@@ -331,7 +316,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return;
     }
     // Block page polls this to auto-return the user to their page the moment it
-    // becomes allowed again — e.g. as soon as the app is paused.
+    // becomes allowed again (e.g. once a break starts).
     if (message && message.type === 'check' && message.url) {
       const decision = await checkUrl(message.url);
       sendResponse({ allowed: decision ? decision.allowed : null, reason: decision?.reason });

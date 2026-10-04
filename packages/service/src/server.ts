@@ -165,6 +165,18 @@ async function handle(
     return sendJson(res, 200, { ok: true });
   }
 
+  // ---- Uninstall cooldown (commitment device) ----
+  if (method === 'GET' && path === '/removal') {
+    return sendJson(res, 200, service.removalStatus());
+  }
+  if (method === 'POST' && path === '/removal/request') {
+    return sendJson(res, 200, { ok: true, ...service.requestRemoval() });
+  }
+  if (method === 'POST' && path === '/removal/cancel') {
+    service.cancelRemoval();
+    return sendJson(res, 200, { ok: true });
+  }
+
   // ---- Modes ----
   if (method === 'POST' && path === '/modes/activate') {
     const body = await readJson<{ modeId: string | null }>(req);

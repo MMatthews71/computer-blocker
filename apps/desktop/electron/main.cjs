@@ -26,7 +26,7 @@ const DEV_URL = process.env.ELECTRON_START_URL; // set in the electron:dev scrip
 // service reports a different version, it's stale (the service outlives the UI)
 // and we replace it so new engine behaviour — like keyword matching — takes
 // effect without the user having to hunt down a background process.
-const EXPECTED_SERVICE_VERSION = '0.7.0-nopause';
+const EXPECTED_SERVICE_VERSION = '0.8.0-cooldown';
 
 // Repo root, resolved from apps/desktop/electron -> ../../..
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');

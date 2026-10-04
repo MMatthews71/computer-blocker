@@ -170,6 +170,13 @@ export interface EngineState {
   modes: Mode[];
   activeModeId: string | null;
   activeSession: FocusSession | null;
+  /**
+   * Commitment-device removal cooldown. When the user asks to uninstall, this
+   * is set to the request time; the uninstaller refuses until a fixed cooldown
+   * (see REMOVAL_COOLDOWN_MS) has elapsed. `null` means no pending request.
+   * Cancelling clears it (the safe direction: keep enforcing).
+   */
+  removalRequestedAt: EpochMs | null;
 }
 
 /** Why a target resolved the way it did. */

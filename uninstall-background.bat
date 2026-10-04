@@ -1,50 +1,104 @@
 @echo off
 REM ============================================================================
-REM  FocusLock - remove the always-on background service
+REM  FocusLock - guarded uninstall (commitment device)
 REM
-REM  Undoes install-background.bat:
-REM    1. Removes both Scheduled Tasks (so nothing auto-starts anymore).
-REM    2. Stops the running service on port 47615.
-REM    3. Deletes the generated watchdog helper.
+REM  FocusLock will NOT uninstall on a whim. Removal uses a 7-day cooldown:
 REM
-REM  Your rules and settings are left untouched. The browser extension is not
-REM  changed here - disable it yourself at chrome://extensions if you want it off.
+REM    1. Run this once. If no removal is pending, it starts the 7-day clock
+REM       and exits WITHOUT removing anything - FocusLock keeps blocking.
+REM    2. Come back any time after 7 full days and run it again. Only then are
+REM       the background tasks, the running service, and the watchdog removed.
+REM
+REM  Cancel any time before the 7 days are up from the FocusLock app
+REM  ("Cancel removal"), which keeps you protected.
+REM
+REM  The cooldown is enforced by the service, whose state file is signed - you
+REM  cannot shorten the wait by editing a file or re-running this script.
 REM ============================================================================
 
-setlocal
+setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 set "VBS=%~dp0.focuslock-watchdog.vbs"
 set "TASK_WATCH=FocusLock Service Watchdog"
 set "TASK_LOGON=FocusLock Service Startup"
+set "ORIGIN=http://127.0.0.1:47615"
 
 echo(
-echo   FocusLock - background service uninstall
-echo   ========================================
+echo   FocusLock - uninstall
+echo   =====================
 echo(
 
-REM --- 1. Remove the scheduled tasks (so the watchdog stops restarting it) ----
+REM --- Make sure the service is up so we can read/advance the cooldown --------
+call :ensure_service
+
+REM --- Ask the service for the current removal status -------------------------
+REM  Response is JSON: {"requested":bool,"unlocked":bool,...,"remainingMs":N}
+for /f "usebackq delims=" %%R in (`powershell -NoProfile -Command ^
+  "try { $r = Invoke-RestMethod -Uri '%ORIGIN%/removal' -TimeoutSec 5; if ($r.unlocked) {'UNLOCKED'} elseif ($r.requested) {'WAIT ' + [int][math]::Ceiling($r.remainingMs/3600000)} else {'NONE'} } catch { 'NOSVC' }"`) do set "STATUS=%%R"
+
+if "%STATUS%"=="NOSVC" (
+    echo   [!] Could not reach the FocusLock service to check the cooldown.
+    echo       The service may be starting - wait a moment and run this again.
+    pause
+    exit /b 1
+)
+
+if "%STATUS%"=="NONE" (
+    echo   Starting the 7-day removal cooldown now.
+    powershell -NoProfile -Command "try { Invoke-RestMethod -Uri '%ORIGIN%/removal/request' -Method Post -TimeoutSec 5 | Out-Null } catch {}"
+    echo(
+    echo   FocusLock will KEEP BLOCKING for the next 7 days.
+    echo   Come back and run this again after that to finish removing it.
+    echo   To stop the removal, open FocusLock and click "Cancel removal".
+    echo(
+    pause
+    exit /b 0
+)
+
+echo %STATUS% | findstr /b "WAIT" >nul
+if not errorlevel 1 (
+    for /f "tokens=2" %%H in ("%STATUS%") do set "HRS=%%H"
+    echo   Removal is pending but the cooldown has NOT elapsed yet.
+    echo   About !HRS! hour^(s^) remain. FocusLock stays fully active until then.
+    echo(
+    echo   Run this again once the 7 days are up, or cancel from the app.
+    echo(
+    pause
+    exit /b 0
+)
+
+REM --- STATUS == UNLOCKED: cooldown elapsed, proceed with real removal ---------
+echo   The 7-day cooldown has elapsed. Removing FocusLock's background pieces...
+echo(
+
 echo   Removing scheduled tasks...
 schtasks /Delete /TN "%TASK_WATCH%" /F >nul 2>nul
 schtasks /Delete /TN "%TASK_LOGON%" /F >nul 2>nul
 
-REM --- 2. Stop any running service on port 47615 ------------------------------
 echo   Stopping the service on port 47615...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :47615 ^| findstr LISTENING') do (
     taskkill /F /PID %%a >nul 2>nul
-    echo     stopped process %%a
 )
 
-REM --- 3. Delete the generated watchdog helper --------------------------------
-if exist "%VBS%" (
-    del /f /q "%VBS%" >nul 2>nul
-    echo   Removed watchdog helper.
-)
+if exist "%VBS%" del /f /q "%VBS%" >nul 2>nul
 
 echo(
-echo   Done. The always-on service has been removed.
-echo   (To also turn off enforcement, disable FocusLock at chrome://extensions.)
+echo   Done. FocusLock's always-on protection has been removed.
+echo   (Disable the FocusLock browser extension at chrome://extensions as well.)
 echo(
 pause
-endlocal
 exit /b 0
+
+REM ---------------------------------------------------------------------------
+:ensure_service
+REM  Start the service hidden if it is not answering, then wait briefly for it.
+powershell -NoProfile -Command "try { Invoke-RestMethod -Uri '%ORIGIN%/health' -TimeoutSec 2 | Out-Null; exit 0 } catch { exit 1 }" >nul 2>nul
+if not errorlevel 1 goto :eof
+if exist "%VBS%" wscript "%VBS%"
+for /l %%i in (1,1,10) do (
+    powershell -NoProfile -Command "try { Invoke-RestMethod -Uri '%ORIGIN%/health' -TimeoutSec 1 | Out-Null; exit 0 } catch { exit 1 }" >nul 2>nul
+    if not errorlevel 1 goto :eof
+    timeout /t 1 >nul
+)
+goto :eof

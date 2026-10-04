@@ -13,6 +13,7 @@
 
 import {
   createInitialState,
+  REMOVAL_COOLDOWN_MS,
   evaluateSafely,
   startBreak as startBreakPure,
   endBreakEarly as endBreakEarlyPure,
@@ -40,7 +41,7 @@ import { Store } from './store.js';
  * service outlives the UI, so a stale one could otherwise keep running with old
  * logic — e.g. not understanding a newer target type).
  */
-export const SERVICE_VERSION = '0.7.0-nopause';
+export const SERVICE_VERSION = '0.8.0-cooldown';
 
 export interface ServiceStatus {
   running: true;
@@ -50,6 +51,10 @@ export interface ServiceStatus {
   activeModeId: string | null;
   activeSession: FocusSession | null;
   breaksRemaining: number;
+  /** Pending uninstall request time, or null. */
+  removalRequestedAt: number | null;
+  /** When the uninstall cooldown elapses (removalRequestedAt + cooldown), or null. */
+  removalUnlocksAt: number | null;
 }
 
 export class ProtectionService {
@@ -64,7 +69,8 @@ export class ProtectionService {
     } else {
       // Drop any leftover global-pause flag from older versions.
       const { pausedUntil: _drop, ...rest } = loaded.state as EngineState & { pausedUntil?: unknown };
-      this.state = rest;
+      // Backward-compat: older states have no removalRequestedAt.
+      this.state = { ...rest, removalRequestedAt: rest.removalRequestedAt ?? null };
       this.integrityOk = !loaded.integrityFailed;
     }
   }
@@ -84,6 +90,11 @@ export class ProtectionService {
       activeModeId: this.state.activeModeId,
       activeSession: this.state.activeSession,
       breaksRemaining: this.state.breaks.tokensRemaining,
+      removalRequestedAt: this.state.removalRequestedAt,
+      removalUnlocksAt:
+        this.state.removalRequestedAt == null
+          ? null
+          : this.state.removalRequestedAt + REMOVAL_COOLDOWN_MS,
     };
   }
 
@@ -251,6 +262,49 @@ export class ProtectionService {
       },
     };
     this.persist();
+  }
+
+  // ---- Uninstall cooldown (commitment device) ----------------------------
+
+  /**
+   * Begin the uninstall cooldown. Idempotent: an existing request keeps its
+   * original timestamp, so you can never shorten the wait by re-requesting.
+   */
+  requestRemoval(now = Date.now()): { removalRequestedAt: number; removalUnlocksAt: number } {
+    if (this.state.removalRequestedAt == null) {
+      this.state = { ...this.state, removalRequestedAt: now };
+      this.persist();
+    }
+    const at = this.state.removalRequestedAt!;
+    return { removalRequestedAt: at, removalUnlocksAt: at + REMOVAL_COOLDOWN_MS };
+  }
+
+  /** Cancel a pending uninstall request (the safe direction: keep enforcing). */
+  cancelRemoval(): void {
+    if (this.state.removalRequestedAt != null) {
+      this.state = { ...this.state, removalRequestedAt: null };
+      this.persist();
+    }
+  }
+
+  /**
+   * Whether the uninstall cooldown has fully elapsed. The uninstaller consults
+   * this; a missing or still-pending request means removal is refused.
+   */
+  removalStatus(now = Date.now()): {
+    requested: boolean;
+    unlocked: boolean;
+    requestedAt: number | null;
+    unlocksAt: number | null;
+    remainingMs: number;
+  } {
+    const requestedAt = this.state.removalRequestedAt;
+    if (requestedAt == null) {
+      return { requested: false, unlocked: false, requestedAt: null, unlocksAt: null, remainingMs: REMOVAL_COOLDOWN_MS };
+    }
+    const unlocksAt = requestedAt + REMOVAL_COOLDOWN_MS;
+    const remainingMs = Math.max(0, unlocksAt - now);
+    return { requested: true, unlocked: remainingMs === 0, requestedAt, unlocksAt, remainingMs };
   }
 
   // ---- Internals ---------------------------------------------------------

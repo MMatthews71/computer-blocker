@@ -157,4 +157,45 @@ describe('ProtectionService end-to-end', () => {
       });
     });
   });
+
+  describe('uninstall cooldown (7-day commitment)', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const t0 = Date.UTC(2024, 0, 1, 12, 0, 0);
+
+    it('starts with no pending removal', () => {
+      const s = service.removalStatus(t0);
+      expect(s.requested).toBe(false);
+      expect(s.unlocked).toBe(false);
+    });
+
+    it('requesting removal does not unlock until 7 days pass', () => {
+      service.requestRemoval(t0);
+      expect(service.removalStatus(t0).unlocked).toBe(false);
+      expect(service.removalStatus(t0 + 6 * DAY).unlocked).toBe(false);
+      expect(service.removalStatus(t0 + 7 * DAY).unlocked).toBe(true);
+    });
+
+    it('re-requesting never shortens the wait (idempotent)', () => {
+      const first = service.requestRemoval(t0);
+      const again = service.requestRemoval(t0 + 3 * DAY);
+      expect(again.removalRequestedAt).toBe(first.removalRequestedAt);
+      expect(service.removalStatus(t0 + 7 * DAY - 1).unlocked).toBe(false);
+      expect(service.removalStatus(t0 + 7 * DAY).unlocked).toBe(true);
+    });
+
+    it('cancelling clears the request so removal is blocked again', () => {
+      service.requestRemoval(t0);
+      service.cancelRemoval();
+      expect(service.removalStatus(t0 + 8 * DAY).requested).toBe(false);
+      expect(service.removalStatus(t0 + 8 * DAY).unlocked).toBe(false);
+    });
+
+    it('survives a service restart (persisted)', () => {
+      service.requestRemoval(t0);
+      const revived = new ProtectionService(store, t0 + DAY);
+      const s = revived.removalStatus(t0 + 7 * DAY);
+      expect(s.requested).toBe(true);
+      expect(s.unlocked).toBe(true);
+    });
+  });
 });

@@ -32,5 +32,9 @@ export function createInitialState(now: number, settings: Settings = DEFAULT_SET
     modes: defaultModes(),
     activeModeId: null,
     activeSession: null,
+    removalRequestedAt: null,
   };
 }
+
+/** Commitment-device uninstall cooldown: 7 full days from the request. */
+export const REMOVAL_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;

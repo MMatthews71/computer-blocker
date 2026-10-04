@@ -5,6 +5,110 @@ import { BreakTokens } from './components/BreakTokens.tsx';
 import { TargetRow } from './components/TargetRow.tsx';
 import { AddTarget } from './components/AddTarget.tsx';
 
+type RemovalStatus = Awaited<ReturnType<typeof api.removalStatus>>;
+
+function formatRemaining(ms: number): string {
+  const totalMinutes = Math.ceil(ms / 60000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+  if (days) parts.push(`${days}d`);
+  if (hours) parts.push(`${hours}h`);
+  if (minutes || parts.length === 0) parts.push(`${minutes}m`);
+  return parts.join(' ');
+}
+
+function RemovalPanel() {
+  const [status, setStatus] = useState<RemovalStatus | null>(null);
+  const [open, setOpen] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setStatus(await api.removalStatus());
+    } catch {
+      /* service down — leave as-is */
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 30000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  if (!status) return null;
+
+  return (
+    <section className="mt-16 border-t border-ink-600 pt-6 text-sm text-slate-500">
+      {!status.requested && !open && (
+        <button className="text-slate-500 hover:text-slate-300" onClick={() => setOpen(true)}>
+          Remove FocusLock
+        </button>
+      )}
+
+      {!status.requested && open && (
+        <div className="space-y-3">
+          <p className="text-slate-400">
+            Removal uses a <strong className="text-slate-200">7-day cooldown</strong>. Start it now and
+            FocusLock keeps blocking for the full 7 days; only then can it be uninstalled. You can cancel
+            anytime before that — cancelling keeps you protected.
+          </p>
+          <div className="flex gap-3">
+            <button
+              className="btn btn-ghost"
+              onClick={async () => {
+                await api.requestRemoval();
+                load();
+              }}
+            >
+              Start 7-day removal
+            </button>
+            <button className="text-slate-500 hover:text-slate-300" onClick={() => setOpen(false)}>
+              Never mind
+            </button>
+          </div>
+        </div>
+      )}
+
+      {status.requested && !status.unlocked && (
+        <div className="space-y-3">
+          <p className="text-amber-300">
+            Removal unlocks in <strong>{formatRemaining(status.remainingMs)}</strong>. Until then FocusLock
+            stays fully active.
+          </p>
+          <button
+            className="btn btn-primary"
+            onClick={async () => {
+              await api.cancelRemoval();
+              load();
+            }}
+          >
+            Cancel removal — keep me protected
+          </button>
+        </div>
+      )}
+
+      {status.requested && status.unlocked && (
+        <div className="space-y-3">
+          <p className="text-slate-300">
+            The cooldown has elapsed. FocusLock can now be uninstalled by running its uninstaller.
+          </p>
+          <button
+            className="btn btn-ghost"
+            onClick={async () => {
+              await api.cancelRemoval();
+              load();
+            }}
+          >
+            Changed my mind — keep FocusLock
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function App() {
   const [state, setState] = useState<EngineState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +173,8 @@ export function App() {
           ))}
         </div>
       </section>
+
+      <RemovalPanel />
     </div>
   );
 }
